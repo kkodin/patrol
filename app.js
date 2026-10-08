@@ -280,7 +280,9 @@ const serial = iso => {           // "2026-02-01" → Excel の日付の数
 // 1 つの列（lay）に、groups を上から書く。空いた行は空欄。区分欄の結合も付け直す
 function writeColumn(xml, lay, groups) {
   const [c1, c2] = lay.cat;
-  const catStyle = XlsxEdit.cellStyle(xml, lay.cat_style_cell);
+  // 区分欄の書式（原本の最初の区分の欄。太線の付いた書式なら元の書式に戻して使う）
+  const catStyle = (() => { const s0 = XlsxEdit.cellStyle(xml, lay.cat_style_cell), tops = S.cfg.forms[S.form].top_style;
+    for (const [b0, v] of Object.entries(tops)) if (Object.values(v).includes(s0)) return b0; return s0; })();
   const rows = lay.rows, ends = lay.ends;
   const inCol = new Set(rows.map(String));
   // この列の区分欄の結合を外す
@@ -304,21 +306,29 @@ function writeColumn(xml, lay, groups) {
     xml = XlsxEdit.setCell(xml, `${c1}${rows[i]}`, null, catStyle);
     merges.push(`${c1}${rows[i]}:${c2}${ends[i]}`);
   }
-  // 区分の境目の太線：区分の始まりの行と、最後の区分のすぐ下の行のセルを「上が太線」の書式に、ほかは元に戻す
+  // 区分の境目の太線：区分の始まりの行の上端を「上が太線」、その前の行の下端を「下が太線」に（両方なら上下）。
+  // 境目でない行は元の書式に戻す。区分欄の書式も、太線の付かない元の書式を使う
   const top = S.cfg.forms[S.form].top_style, back = {};
-  for (const [b0, v] of Object.entries(top)) back[v] = b0;
+  for (const [b0, v] of Object.entries(top)) for (const id of Object.values(v)) back[id] = b0;
   const starts = new Set();
   let acc = 0;
   for (const g of groups) { starts.add(acc); acc += g.n; }
   if (acc < rows.length) starts.add(acc);
+  const flags = {};            // 行の番号（シート）→ "t" / "b" / "tb"
+  const addFlag = (r, f) => { flags[r] = flags[r] && flags[r] !== f ? "tb" : f; };
   rows.forEach((r, k) => {
+    if (starts.has(k)) { addFlag(r, "t"); if (k > 0) addFlag(ends[k - 1], "b"); }
+  });
+  const edge = new Set([...rows, ...ends]);
+  for (const r of edge) {
     for (let c = lay.span[0]; c <= lay.span[1]; c++) {
       const ref = colName(c) + r, cur = XlsxEdit.cellStyle(xml, ref);
       if (cur === undefined) continue;
-      const base = back[cur] || cur, want = starts.has(k) ? (top[base] || base) : base;
+      const base = back[cur] || cur, f = flags[r];
+      const want = f ? ((top[base] || {})[f] || base) : base;
       if (want !== cur) xml = XlsxEdit.setStyle(xml, ref, want);
     }
-  });
+  }
   return XlsxEdit.remerge(xml, r => { const m = r.match(re); return m && inCol.has(m[1]); }, merges);
 }
 const colName = n => { let s = ""; while (n > 0) { const m = (n - 1) % 26; s = String.fromCharCode(65 + m) + s; n = Math.floor((n - 1) / 26); } return s; };
