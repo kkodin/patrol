@@ -144,7 +144,9 @@ const findChoice = name => choices().find(c => c.name === name);
 const sizeOf = name => (findChoice(name) || { n: 0 }).n;
 // 区分が使う行の数：項目の数と、区分の名前（縦書き）が入る行の数の大きいほう。足りない分は下に空欄の行
 const CHAR_MM = 3.3;    // 縦書き 8pt の 1 文字の高さ（行間こみ）
-const rowsFor = (name, n, h) => Math.max(n, Math.ceil(name.length * CHAR_MM / h));
+// 区分欄に出す名前（改行で 2 列に分けたもの）。行数は長いほうの行の文字数で数える
+const labelOf = name => (findChoice(name) || {}).label || name;
+const rowsFor = (name, n, h) => Math.max(n, Math.ceil(Math.max(...labelOf(name).split("\n").map(x => x.length)) * CHAR_MM / h));
 // 区分ごとの項目の手直し：外した項目（S.excl[区分]＝Set）、自分で足した項目（S.extra[区分]＝配列）
 const MAX_ITEMS = 7;            // 1 つの区分に入れる項目は 7 つまで
 const allItems = name => [...((findChoice(name) || { items: [] }).items), ...(S.extra[name] || [])];
@@ -351,7 +353,7 @@ function writeColumn(xml, lay, groups) {
       const has = k < its.length;    // 項目の行（番号つき）／名前を入れるための空欄の行
       xml = XlsxEdit.setCell(xml, `${lay.no}${rows[i]}`, has ? MARU[k] : null);
       xml = XlsxEdit.setCell(xml, `${lay.item}${rows[i]}`, has ? its[k] : null);
-      xml = XlsxEdit.setCell(xml, `${c1}${rows[i]}`, k === 0 ? g.name : null, catStyle);
+      xml = XlsxEdit.setCell(xml, `${c1}${rows[i]}`, k === 0 ? labelOf(g.name) : null, catStyle);
     }
     merges.push(`${c1}${rows[i - g.n]}:${c2}${ends[i - 1]}`);
   }
