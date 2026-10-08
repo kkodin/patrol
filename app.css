@@ -79,3 +79,9 @@ textarea { font: inherit; font-size: 14px; color: var(--ink); border: 1px solid 
 .admin { border: 1px dashed var(--line); border-radius: 6px; padding: 8px 12px; margin: 8px 0; background: #fafbfc; }
 .adminList { max-height: 260px; overflow: auto; display: flex; flex-direction: column; gap: 2px; margin: 6px 0; font-size: 13px; }
 .adminRow { display: flex; align-items: center; gap: 4px; cursor: pointer; }
+
+.itemRow { display: flex; align-items: baseline; gap: 4px; font-size: 13px; color: var(--ink); padding: 1px 0; cursor: pointer; }
+.itemRow.off { color: var(--sub); text-decoration: line-through; }
+.itemRow .mini { margin-left: 6px; font-size: 11px; }
+.addRow { display: flex; gap: 6px; margin-top: 4px; }
+.addRow input { flex: 1; font-size: 13px; }

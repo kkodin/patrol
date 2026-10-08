@@ -6,7 +6,7 @@ const GRAPH = "https://graph.microsoft.com/v1.0";
 const SCOPES = ["User.Read", "Files.ReadWrite.All"];   // 全体工程表で管理者の同意を済ませた権限（このページは読むだけ）
 const EMBED = window.self !== window.top;          // ポータル（Google サイト）に埋め込まれているか
 const $ = id => document.getElementById(id);
-const S = { form: "shita", site: null, cfg: null, sites: [], files: {}, list: [], hidden: {} };
+const S = { form: "shita", site: null, cfg: null, sites: [], files: {}, list: [], hidden: {}, excl: {}, extra: {}, open: new Set() };
 const HIDDEN_FILE = "データ/現場の非表示.json";   // 終わった現場（一覧に出さない）。保存はフォルダを編集できる人だけ
 
 /* ---------- サインインと Graph ---------- */
@@ -145,15 +145,23 @@ const sizeOf = name => (findChoice(name) || { n: 0 }).n;
 // 区分が使う行の数：項目の数と、区分の名前（縦書き）が入る行の数の大きいほう。足りない分は下に空欄の行
 const CHAR_MM = 3.3;    // 縦書き 8pt の 1 文字の高さ（行間こみ）
 const rowsFor = (name, n, h) => Math.max(n, Math.ceil(name.length * CHAR_MM / h));
+// 区分ごとの項目の手直し：外した項目（S.excl[区分]＝Set）、自分で足した項目（S.extra[区分]＝配列）
+const MAX_ITEMS = 7;            // 1 つの区分に入れる項目は 7 つまで
+const allItems = name => [...((findChoice(name) || { items: [] }).items), ...(S.extra[name] || [])];
+const isOff = (name, t) => (S.excl[name] || new Set()).has(t);
 // 同じ点検項目は二重に入れない：上の区分から順に見て、前に入った項目と同じ文の項目は省く
 const keyOf = t => (t || "").normalize("NFKC").replace(/\s/g, "");
 function itemsInOrder(list) {
   const seen = new Set(), out = {};
   for (const name of list) {
-    const c = findChoice(name);
-    const all = c ? c.items : [];
-    out[name] = all.filter(t => { const k = keyOf(t); if (seen.has(k)) return false; seen.add(k); return true; });
-    out[name].dropped = all.length - out[name].length;
+    const use = [], dup = [];
+    for (const t of allItems(name)) {
+      if (isOff(name, t)) continue;
+      const k = keyOf(t);
+      if (seen.has(k)) { dup.push(t); continue; }
+      seen.add(k); use.push(t);
+    }
+    out[name] = use; out[name].dropped = dup.length; out[name].dup = new Set(dup);
   }
   return out;
 }
@@ -197,14 +205,47 @@ function renderChosen() {
   const box = $("chosen");
   box.innerHTML = "";
   S.list.forEach((name, i) => {
-    const c = findChoice(name), w = where[name];
+    const w = where[name], e = eff[name];
     const up = el("button", { class: "mini", title: "上へ", onclick: () => { if (i > 0) { [S.list[i - 1], S.list[i]] = [S.list[i], S.list[i - 1]]; renderChosen(); } } }, "↑");
     const dn = el("button", { class: "mini", title: "下へ", onclick: () => { if (i < S.list.length - 1) { [S.list[i + 1], S.list[i]] = [S.list[i], S.list[i + 1]]; renderChosen(); } } }, "↓");
-    const rm = el("button", { class: "mini", title: "外す", onclick: () => { S.list.splice(i, 1); renderChosen(); } }, "×");
-    const items = el("div", { class: "items", hidden: "" });
-    (c ? c.items : []).forEach((t, k) => items.append(el("div", {}, `${MARU[k]} ${t}`)));
-    const nm = el("button", { class: "link name", onclick: () => { items.hidden = !items.hidden; } },
-      `${name}（${eff[name].length}項目${eff[name].dropped ? `／重なる ${eff[name].dropped} 項目は省きます` : ""}）`);
+    const rm = el("button", { class: "mini", title: "区分ごと外す", onclick: () => { S.list.splice(i, 1); renderChosen(); } }, "×");
+    // 中身：項目ごとにチェック（外す／入れる）。前の区分と同じ文の項目は省く。下で項目を足せる
+    const items = el("div", { class: "items" });
+    items.hidden = !S.open.has(name);
+    allItems(name).forEach(t => {
+      const cb = el("input", { type: "checkbox" });
+      const dup = e.dup.has(t);
+      cb.checked = !isOff(name, t) && !dup;
+      cb.disabled = dup;
+      cb.onchange = () => {
+        const set = S.excl[name] = S.excl[name] || new Set();
+        if (cb.checked) {
+          if (e.length >= MAX_ITEMS) { cb.checked = false; alert(`1 つの区分に入れる項目は ${MAX_ITEMS} つまでです。ほかの項目のチェックを外してから入れてください。`); return; }
+          set.delete(t);
+        } else set.add(t);
+        renderChosen();
+      };
+      const mine = (S.extra[name] || []).includes(t);
+      const del = mine ? el("button", { class: "mini", title: "足した項目を消す", onclick: () => {
+        S.extra[name] = S.extra[name].filter(x => x !== t); renderChosen(); } }, "消す") : "";
+      items.append(el("label", { class: "itemRow" + (cb.checked ? "" : " off") }, cb, ` ${t}`,
+        dup ? el("span", { class: "muted small" }, "（前の区分と同じなので省く）") : "",
+        mine ? el("span", { class: "muted small" }, "（足した項目）") : "", del));
+    });
+    const add = el("input", { type: "text", placeholder: "この区分に項目を足す（例：〇〇は適切か）" });
+    const addBtn = el("button", { class: "mini", onclick: () => {
+      const t = add.value.trim();
+      if (!t) return;
+      if (e.length >= MAX_ITEMS) { alert(`1 つの区分に入れる項目は ${MAX_ITEMS} つまでです。ほかの項目のチェックを外してから足してください。`); return; }
+      if (allItems(name).some(x => keyOf(x) === keyOf(t))) { alert("同じ項目がもうあります。"); return; }
+      (S.extra[name] = S.extra[name] || []).push(t);
+      renderChosen();
+    } }, "足す");
+    add.onkeydown = ev => { if (ev.key === "Enter") addBtn.click(); };
+    items.append(el("div", { class: "addRow" }, add, addBtn));
+    const nm = el("button", { class: "link name", title: "押すと中身を見て、外す・足すができます", onclick: () => {
+      if (S.open.has(name)) S.open.delete(name); else S.open.add(name); items.hidden = !S.open.has(name);
+    } }, `${S.open.has(name) ? "▼" : "▶"} ${name}（${e.length}項目${e.dropped ? `／重なる ${e.dropped} 項目は省きます` : ""}）`);
     box.append(el("div", { class: "chosenRow" + (w ? "" : " over") },
       el("span", { class: "place" }, colLabel(w)), nm, el("span", { class: "btns" }, up, dn, rm), items));
   });
@@ -273,6 +314,7 @@ function renderSuggest() {
 }
 
 function resetKubun() {
+  S.excl = {}; S.extra = {}; S.open = new Set();
   S.list = S.cfg.forms[S.form].defaults.filter(n => findChoice(n) && sizeOf(n) > 0);
   renderChosen();
 }
