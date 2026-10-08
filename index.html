@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>パトロール点検簿をつくる</title>
-<link rel="stylesheet" href="app.css?v=202610081900">
+<link rel="stylesheet" href="app.css?v=202610081922">
 </head>
 <body>
 <header>
@@ -71,13 +71,17 @@
 
     <li class="card">
       <h2>4．区分（工種）を選ぶ</h2>
-      <h3>おすすめ（作業内容と工事概要から。押すと 2枚目の空いている枠に入ります）</h3>
+      <p class="muted small">選んだ区分は、上から順に 1枚目の左の列 → 右の列 に詰めて入ります。同じ区分は 1 回だけ。</p>
+      <label class="check"><input type="checkbox" id="allow2"> 2枚目を使ってよい（外せない区分が多く、1枚に入りきらない現場）</label>
+      <h3>おすすめ（作業内容と工事概要から。押すと一覧の下に足します）</h3>
       <div id="suggest" class="chips"></div>
       <p id="summaryHint" class="summary"></p>
-      <h3>1枚目：点検表（はじめは いつもの区分。大項目 → 中項目 → 小項目 の順に選び直せます）</h3>
-      <div id="slots1" class="slots"></div>
-      <h3>2枚目：工種別点検表（その日の工種を選ぶ。使わない枠は空欄＝手書き用）</h3>
-      <div id="slots2" class="slots"></div>
+      <h3>区分を足す：大項目 → 中項目 → 小項目</h3>
+      <div class="row picker"><select id="pBig"></select><select id="pMid"></select><select id="pSmall"></select></div>
+      <h3>選んだ区分 <button id="bReset" class="link">いつもの区分に戻す</button></h3>
+      <p id="meter" class="meter"></p>
+      <div id="chosen" class="chosen"></div>
+      <p id="overMsg" class="warn"></p>
     </li>
 
     <li class="card make">
@@ -90,8 +94,8 @@
 </main>
 
 <script src="lib/msal-browser.min.js"></script>
-<script src="config.js?v=202610081900"></script>
-<script src="zip.js?v=202610081900"></script>
-<script src="app.js?v=202610081900"></script>
+<script src="config.js?v=202610081922"></script>
+<script src="zip.js?v=202610081922"></script>
+<script src="app.js?v=202610081922"></script>
 </body>
 </html>

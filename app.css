@@ -61,3 +61,17 @@ textarea { font: inherit; font-size: 14px; color: var(--ink); border: 1px solid 
 .slotHead select[hidden] { display: none; }
 .slotHead { flex-wrap: wrap; }
 .slotHead select { flex: 1 1 120px; }
+
+.check { display: flex; align-items: center; gap: 6px; margin: 6px 0; font-size: 14px; }
+.picker select { flex: 1 1 160px; }
+.picker select[hidden] { display: none; }
+.meter { font-size: 13px; color: var(--sub); margin: 4px 0; }
+.chosen { display: flex; flex-direction: column; gap: 4px; }
+.chosenRow { display: grid; grid-template-columns: 88px 1fr auto; align-items: center; gap: 8px;
+  border: 1px solid var(--line); border-radius: 6px; padding: 4px 8px; }
+.chosenRow.over { border-color: var(--warn); background: #fdf1f0; }
+.chosenRow .place { font-size: 12px; color: var(--sub); }
+.chosenRow.over .place { color: var(--warn); font-weight: bold; }
+.chosenRow .name { text-align: left; color: var(--ink); text-decoration: none; }
+.chosenRow .items { grid-column: 2 / 4; }
+.mini { border: 1px solid var(--line); background: #fff; border-radius: 4px; padding: 0 8px; cursor: pointer; }

@@ -95,11 +95,12 @@
   const colNum = ref => ref.replace(/\d+/g, "").split("").reduce((n, ch) => n * 26 + ch.charCodeAt(0) - 64, 0);
 
   // value：文字（inlineStr）・数（v）・null（中を空にする。書式は残す）
-  function setCell(xml, ref, value) {
+  function setCell(xml, ref, value, style) {
     const re = new RegExp(`<c r="${ref}"((?:\\s+(?!r=)[a-zA-Z:]+="[^"]*")*)\\s*(?:/>|>[\\s\\S]*?</c>)`);
     const m = xml.match(re);
     let attrs = "";
     if (m) attrs = m[1].replace(/\s+t="[^"]*"/, "");
+    if (style !== undefined) attrs = attrs.replace(/\s+s="[^"]*"/, "") + ` s="${style}"`;
     let cell;
     if (value === null || value === undefined || value === "") cell = `<c r="${ref}"${attrs}/>`;
     else if (typeof value === "number") cell = `<c r="${ref}"${attrs}><v>${value}</v></c>`;
@@ -121,5 +122,21 @@
     return xml.replace(rre, rm[0].replace(rm[1], newInner));
   }
 
-  window.XlsxEdit = { readZip, text, setText, writeZip, setCell, crc32 };
+  // セルの書式番号（s）を読む
+  function cellStyle(xml, ref) {
+    const m = xml.match(new RegExp(`<c r="${ref}"[^>]*?\\ss="(\\d+)"`));
+    return m ? m[1] : undefined;
+  }
+
+  // 結合を付け直す：drop(ref) が true の結合を外し、add の結合を足す
+  function remerge(xml, drop, add) {
+    const m = xml.match(/<mergeCells[^>]*>([\s\S]*?)<\/mergeCells>/);
+    if (!m) throw new Error("結合の情報がありません");
+    const refs = [...m[1].matchAll(/<mergeCell ref="([^"]+)"\s*\/>/g)].map(x => x[1]).filter(r => !drop(r));
+    const all = refs.concat(add);
+    const body = `<mergeCells count="${all.length}">${all.map(r => `<mergeCell ref="${r}"/>`).join("")}</mergeCells>`;
+    return xml.replace(m[0], body);
+  }
+
+  window.XlsxEdit = { readZip, text, setText, writeZip, setCell, cellStyle, remerge, crc32 };
 })();
