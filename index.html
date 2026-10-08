@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>パトロール点検簿をつくる</title>
-<link rel="stylesheet" href="app.css?v=202610081922">
+<link rel="stylesheet" href="app.css?v=202610081939">
 </head>
 <body>
 <header>
@@ -37,6 +37,12 @@
         <input id="siteQ" type="search" placeholder="コード・現場名・元請・担当者で探す">
         <span id="siteCount" class="muted small"></span>
         <button id="bNoSite" class="link">現場を選ばない（手書き用）</button>
+        <button id="bSiteAdmin" class="link">一覧を整理（終わった現場を隠す）</button>
+      </div>
+      <div id="siteAdmin" class="admin" hidden>
+        <p class="small">終わった現場にチェックを入れて「保存」すると、次から一覧に出なくなります（管理者だけが保存できます。チェックを外して保存すると戻ります）。</p>
+        <div id="siteAdminList" class="adminList"></div>
+        <button id="bSiteAdminSave" class="primary">保存</button> <span id="siteAdminMsg" class="small"></span>
       </div>
       <select id="siteList" size="8"></select>
       <div id="siteDetail" hidden>
@@ -94,8 +100,8 @@
 </main>
 
 <script src="lib/msal-browser.min.js"></script>
-<script src="config.js?v=202610081922"></script>
-<script src="zip.js?v=202610081922"></script>
-<script src="app.js?v=202610081922"></script>
+<script src="config.js?v=202610081939"></script>
+<script src="zip.js?v=202610081939"></script>
+<script src="app.js?v=202610081939"></script>
 </body>
 </html>

@@ -6,7 +6,8 @@ const GRAPH = "https://graph.microsoft.com/v1.0";
 const SCOPES = ["User.Read", "Files.ReadWrite.All"];   // 全体工程表で管理者の同意を済ませた権限（このページは読むだけ）
 const EMBED = window.self !== window.top;          // ポータル（Google サイト）に埋め込まれているか
 const $ = id => document.getElementById(id);
-const S = { form: "shita", site: null, cfg: null, sites: [], files: {}, list: [] };
+const S = { form: "shita", site: null, cfg: null, sites: [], files: {}, list: [], hidden: {} };
+const HIDDEN_FILE = "データ/現場の非表示.json";   // 終わった現場（一覧に出さない）。保存はフォルダを編集できる人だけ
 
 /* ---------- サインインと Graph ---------- */
 let msalApp = null;
@@ -35,6 +36,14 @@ async function findFolder() {
   base = `/drives/${it.parentReference.driveId}/items/${it.id}`;
   $("idNote").hidden = false;
   $("idNote").textContent = `（管理用）config.js の folder に入れる値：driveId "${it.parentReference.driveId}"、itemId "${it.id}"`;
+}
+async function upload(name, text) {
+  const enc = name.split("/").map(encodeURIComponent).join("/");
+  const res = await fetch(`${GRAPH}${base}:/${enc}:/content`, {
+    method: "PUT", body: text,
+    headers: { Authorization: "Bearer " + await token(), "Content-Type": "application/json" } });
+  if (!res.ok) { const e = new Error(`${name} を保存できません（${res.status}）`); e.status = res.status; throw e; }
+  return res.json();
 }
 async function download(name, as) {
   const enc = name.split("/").map(encodeURIComponent).join("/");
@@ -75,7 +84,8 @@ function renderSiteList() {
   const q = $("siteQ").value.trim().normalize("NFKC").toLowerCase();
   const list = $("siteList");
   list.innerHTML = "";
-  const hits = S.sites.filter(r => !q || `${r.code} ${r.name} ${r.client} ${r.staff} ${r.place}`.normalize("NFKC").toLowerCase().includes(q));
+  const hits = S.sites.filter(r => !S.hidden[r.code])
+    .filter(r => !q || `${r.code} ${r.name} ${r.client} ${r.staff} ${r.place}`.normalize("NFKC").toLowerCase().includes(q));
   let lastP = null, og = null;
   for (const r of hits) {
     if (r.period !== lastP) { og = el("optgroup", { label: `${r.period}期` }); list.append(og); lastP = r.period; }
@@ -95,6 +105,35 @@ function pickSite(code) {
   $("siteSummary").textContent = S.site ? (S.site.summary || "") : "";
   $("siteDetail").hidden = !S.site;
   renderSlots();
+}
+
+/* ---------- 一覧を整理：終わった現場にチェック → 保存すると一覧に出さない ---------- */
+function renderSiteAdmin() {
+  const box = $("siteAdminList");
+  box.innerHTML = "";
+  for (const r of S.sites) {
+    const cb = el("input", { type: "checkbox", "data-code": r.code });
+    cb.checked = !!S.hidden[r.code];
+    box.append(el("label", { class: "adminRow" }, cb, ` ${r.code}　${r.name}　（${r.client || "―"}／${r.staff || "―"}）`));
+  }
+}
+async function saveSiteAdmin() {
+  const hidden = {};
+  document.querySelectorAll("#siteAdminList input:checked").forEach(cb => {
+    const c = cb.dataset.code;
+    hidden[c] = S.hidden[c] || { name: (S.sites.find(r => r.code === c) || {}).name || "", when: new Date().toISOString().slice(0, 10) };
+  });
+  $("siteAdminMsg").textContent = "保存しています…";
+  try {
+    await upload(HIDDEN_FILE, JSON.stringify({ note: "社内パトロール点検簿：一覧に出さない（終わった）現場", hidden }, null, 1));
+    S.hidden = hidden;
+    $("siteAdminMsg").textContent = `保存しました（隠す現場 ${Object.keys(hidden).length} 件）。`;
+    renderSiteList();
+  } catch (e) {
+    $("siteAdminMsg").textContent = (e.status === 403 || e.status === 401)
+      ? "保存できません。一覧の整理は、フォルダを編集できる人（管理者）だけができます。"
+      : "保存できませんでした：" + e.message;
+  }
 }
 
 /* ---------- 区分：選んだ区分の一覧（同じ区分は 1 回だけ）を、1枚目の左→右（→2枚目の左→右）に詰める ---------- */
@@ -342,11 +381,13 @@ async function load() {
   $("loading").hidden = false;
   try {
     await findFolder();
-    const [cfg, master] = await Promise.all([download("データ/点検簿の設定.json", "json"),
-                                             download("データ/現場マスタ.json", "json")]);
+    const [cfg, master, hid] = await Promise.all([download("データ/点検簿の設定.json", "json"),
+                                                  download("データ/現場マスタ.json", "json"),
+                                                  download(HIDDEN_FILE, "json").catch(() => ({ hidden: {} }))]);
+    S.hidden = hid.hidden || {};
     S.cfg = cfg;
     S.sites = master.sites.slice().sort((a, b) => (b.period - a.period) || a.code.localeCompare(b.code));
-    $("masterInfo").textContent = `現場 ${S.sites.length} 件（${(master.meta.made || "").slice(0, 10)} 作成）`;
+    $("masterInfo").textContent = `現場 ${S.sites.length - Object.keys(S.hidden).filter(c => S.sites.some(r => r.code === c)).length} 件（${(master.meta.made || "").slice(0, 10)} 作成）`;
     const ts = $("f_tenki");
     ts.innerHTML = ""; ts.append(el("option", { value: "" }, "（手書き：晴・曇・雨・雪）"));
     cfg.tenki.forEach(t => ts.append(el("option", { value: t }, t)));
@@ -371,6 +412,8 @@ async function start() {
   $("bMake").onclick = build;
   $("f_sagyou").oninput = renderSuggest;
   $("allow2").onchange = renderChosen;
+  $("bSiteAdmin").onclick = () => { const p = $("siteAdmin"); p.hidden = !p.hidden; if (!p.hidden) renderSiteAdmin(); };
+  $("bSiteAdminSave").onclick = saveSiteAdmin;
   $("bReset").onclick = resetKubun;
   $("pBig").onchange = () => { pick.big = $("pBig").value; pick.mid = null; renderPicker(); };
   $("pMid").onchange = () => { const v = $("pMid").value; pick.mid = v === COMMON ? "" : (v || null); renderPicker(); };
