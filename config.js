@@ -5,7 +5,7 @@ window.PATROL_CONFIG = {
   tenantId: "acd238cd-b6aa-4b5a-8056-44ed0177515f",   // ディレクトリ (テナント) ID
   folder: {       // 社内共有フォルダ\05_現場パトロール（原本の点検簿と データ\ が入っている）
     driveId: "b!fW3m73KhV0i7xf8c58hB1ha1ymrf1RZIq3ibCMmfIEMZJwRVBBcZSqMjvDbFdiXW",
-    itemId: "",   // 空のときは持ち主の OneDrive から path で探す（見つかった ID を画面に出すので、ここへ貼る）
+    itemId: "01NJOWDESNGKZLRTUKWFAJ76SUAXPCQNQ4",   // 05_現場パトロール（空にすると持ち主の OneDrive から path で探し、ID を画面に出す）
     path: "社内共有フォルダ/05_現場パトロール"
   }
 };
