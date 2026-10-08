@@ -1,0 +1,97 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>パトロール点検簿をつくる</title>
+<link rel="stylesheet" href="app.css">
+</head>
+<body>
+<header>
+  <h1>社内パトロール点検簿をつくる</h1>
+  <span id="who" class="who"></span>
+</header>
+
+<section id="signin" class="card" hidden>
+  <p>会社の Microsoft アカウントでサインインしてください（最初の 1 回だけ）。</p>
+  <button id="bSignIn" class="primary">サインイン</button>
+  <p id="signinMsg" class="warn"></p>
+</section>
+
+<p id="loading" class="muted" hidden>読み込んでいます…</p>
+<p id="err" class="card warn" hidden></p>
+
+<main id="main" hidden>
+  <ol class="steps">
+    <li class="card">
+      <h2>1．様式を選ぶ</h2>
+      <div id="formSel" class="toggle">
+        <button data-form="moto">元請工事用</button>
+        <button data-form="shita">下請工事用</button>
+      </div>
+    </li>
+
+    <li class="card">
+      <h2>2．現場を選ぶ <span id="masterInfo" class="muted small"></span></h2>
+      <div class="row">
+        <input id="siteQ" type="search" placeholder="コード・現場名・元請・担当者で探す">
+        <span id="siteCount" class="muted small"></span>
+        <button id="bNoSite" class="link">現場を選ばない（手書き用）</button>
+      </div>
+      <select id="siteList" size="8"></select>
+      <div id="siteDetail" hidden>
+        <p class="muted small">点検簿に入る内容です。違うところはここで直せます。</p>
+        <div class="grid">
+          <label>工事名（正式）<input id="f_koujimei" class="wide"></label>
+          <label>社内工事名<input id="f_shanai"></label>
+          <label>工期（自）<input id="f_start" type="date"></label>
+          <label>工期（至）<input id="f_end" type="date"></label>
+          <label>工事担当責任者<input id="f_staff"></label>
+          <label>請負金（千円）<input id="f_amount" inputmode="numeric"></label>
+          <label><span id="lab_client">元請名</span><input id="f_client"></label>
+          <label><span id="lab_client_person">元請担当者</span><input id="f_client_person"></label>
+          <label>工事場所<input id="f_place" class="wide"></label>
+        </div>
+        <p id="siteSummary" class="summary"></p>
+      </div>
+    </li>
+
+    <li class="card">
+      <h2>3．点検の情報（空欄なら手書き用）</h2>
+      <div class="grid">
+        <label>点検日<input id="f_date" type="date"></label>
+        <label>時刻<span class="row"><input id="f_time1" type="time"> ～ <input id="f_time2" type="time"></span></label>
+        <label>天候<select id="f_tenki"></select></label>
+        <label>点検者（サインインした人。2名なら「山田・佐藤」のように）<input id="f_tenkensha"></label>
+        <label>立会者<input id="f_tachiai"></label>
+        <label class="full">その日の作業内容（書くと、4 の「おすすめ」に必要そうな区分が出ます）
+          <textarea id="f_sagyou" rows="2" placeholder="例：ライナープレート立坑の掘削、バックホウ0.1、クレーンで資材の吊込み"></textarea></label>
+      </div>
+    </li>
+
+    <li class="card">
+      <h2>4．区分（工種）を選ぶ</h2>
+      <h3>おすすめ（作業内容と工事概要から。押すと 2枚目の空いている枠に入ります）</h3>
+      <div id="suggest" class="chips"></div>
+      <p id="summaryHint" class="summary"></p>
+      <h3>1枚目：点検表（はじめは いつもの区分。大項目 → 中項目 → 小項目 の順に選び直せます）</h3>
+      <div id="slots1" class="slots"></div>
+      <h3>2枚目：工種別点検表（その日の工種を選ぶ。使わない枠は空欄＝手書き用）</h3>
+      <div id="slots2" class="slots"></div>
+    </li>
+
+    <li class="card make">
+      <h2>5．点検簿をダウンロード</h2>
+      <button id="bMake" class="primary big">点検簿をダウンロード</button>
+      <p id="makeMsg"></p>
+    </li>
+  </ol>
+  <p id="idNote" class="muted small" hidden></p>
+</main>
+
+<script src="lib/msal-browser.min.js"></script>
+<script src="config.js"></script>
+<script src="zip.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
