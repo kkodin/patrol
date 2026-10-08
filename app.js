@@ -142,6 +142,9 @@ const uniq = a => [...new Set(a)];
 const choices = () => S.cfg.forms[S.form].choices;
 const findChoice = name => choices().find(c => c.name === name);
 const sizeOf = name => (findChoice(name) || { n: 0 }).n;
+// 区分が使う行の数：項目の数と、区分の名前（縦書き）が入る行の数の大きいほう。足りない分は下に空欄の行
+const CHAR_MM = 3.3;    // 縦書き 8pt の 1 文字の高さ（行間こみ）
+const rowsFor = (name, h) => Math.max(sizeOf(name), Math.ceil(name.length * CHAR_MM / h));
 
 function fillSelect(sel, opts, value, blank) {
   sel.innerHTML = "";
@@ -164,9 +167,9 @@ function place(list) {
   let ci = 0;
   const where = {};
   for (const name of list) {
-    const n = sizeOf(name);
-    while (ci < cols.length && cols[ci].used + n > cols[ci].cap) ci++;
+    while (ci < cols.length && cols[ci].used + rowsFor(name, cols[ci].lay.h) > cols[ci].cap) ci++;
     if (ci >= cols.length) { where[name] = null; continue; }
+    const n = rowsFor(name, cols[ci].lay.h);
     cols[ci].groups.push({ name, start: cols[ci].used, n });
     cols[ci].used += n;
     where[name] = cols[ci];
@@ -288,8 +291,9 @@ function writeColumn(xml, lay, groups) {
     const c = findChoice(g.name);
     // 空いた行（前の区分との間）は無い：詰めて入れる
     for (let k = 0; k < g.n; k++, i++) {
-      xml = XlsxEdit.setCell(xml, `${lay.no}${rows[i]}`, MARU[k] || "");
-      xml = XlsxEdit.setCell(xml, `${lay.item}${rows[i]}`, c.items[k] || null);
+      const has = k < c.items.length;    // 項目の行（番号つき）／名前を入れるための空欄の行
+      xml = XlsxEdit.setCell(xml, `${lay.no}${rows[i]}`, has ? MARU[k] : null);
+      xml = XlsxEdit.setCell(xml, `${lay.item}${rows[i]}`, has ? c.items[k] : null);
       xml = XlsxEdit.setCell(xml, `${c1}${rows[i]}`, k === 0 ? g.name : null, catStyle);
     }
     merges.push(`${c1}${rows[i - g.n]}:${c2}${ends[i - 1]}`);
@@ -300,8 +304,24 @@ function writeColumn(xml, lay, groups) {
     xml = XlsxEdit.setCell(xml, `${c1}${rows[i]}`, null, catStyle);
     merges.push(`${c1}${rows[i]}:${c2}${ends[i]}`);
   }
+  // 区分の境目の太線：区分の始まりの行と、最後の区分のすぐ下の行のセルを「上が太線」の書式に、ほかは元に戻す
+  const top = S.cfg.forms[S.form].top_style, back = {};
+  for (const [b0, v] of Object.entries(top)) back[v] = b0;
+  const starts = new Set();
+  let acc = 0;
+  for (const g of groups) { starts.add(acc); acc += g.n; }
+  if (acc < rows.length) starts.add(acc);
+  rows.forEach((r, k) => {
+    for (let c = lay.span[0]; c <= lay.span[1]; c++) {
+      const ref = colName(c) + r, cur = XlsxEdit.cellStyle(xml, ref);
+      if (cur === undefined) continue;
+      const base = back[cur] || cur, want = starts.has(k) ? (top[base] || base) : base;
+      if (want !== cur) xml = XlsxEdit.setStyle(xml, ref, want);
+    }
+  });
   return XlsxEdit.remerge(xml, r => { const m = r.match(re); return m && inCol.has(m[1]); }, merges);
 }
+const colName = n => { let s = ""; while (n > 0) { const m = (n - 1) % 26; s = String.fromCharCode(65 + m) + s; n = Math.floor((n - 1) / 26); } return s; };
 
 async function build() {
   const btn = $("bMake");
@@ -349,6 +369,7 @@ async function build() {
       x2 = writeColumn(x2, f.layout2.L, byKey["2L"] || []);
       x2 = writeColumn(x2, f.layout2.R, byKey["2R"] || []);
     }
+    put("shiteki_head", use2 ? "指摘・指導事項　／　是正確認　　（2枚目の分もここに記入）" : "指摘・指導事項　／　是正確認");
     xw = xw.replace(new RegExp(`(<sheet name="${f.page2_name}"[^>]*?state=")[a-zA-Z]+(")`), `$1${use2 ? "visible" : "hidden"}$2`);
 
     XlsxEdit.setText(t1, x1); XlsxEdit.setText(t2, x2); XlsxEdit.setText(wbx, xw);

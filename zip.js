@@ -138,5 +138,11 @@
     return xml.replace(m[0], body);
   }
 
-  window.XlsxEdit = { readZip, text, setText, writeZip, setCell, cellStyle, remerge, crc32 };
+  // セルの書式番号（s）だけを変える（中身はそのまま）
+  function setStyle(xml, ref, style) {
+    const re = new RegExp(`(<c r="${ref}"[^>]*?\\ss=")(\\d+)(")`);
+    return xml.replace(re, `$1${style}$3`);
+  }
+
+  window.XlsxEdit = { readZip, text, setText, writeZip, setCell, cellStyle, setStyle, remerge, crc32 };
 })();
