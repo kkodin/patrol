@@ -144,7 +144,19 @@ const findChoice = name => choices().find(c => c.name === name);
 const sizeOf = name => (findChoice(name) || { n: 0 }).n;
 // 区分が使う行の数：項目の数と、区分の名前（縦書き）が入る行の数の大きいほう。足りない分は下に空欄の行
 const CHAR_MM = 3.3;    // 縦書き 8pt の 1 文字の高さ（行間こみ）
-const rowsFor = (name, h) => Math.max(sizeOf(name), Math.ceil(name.length * CHAR_MM / h));
+const rowsFor = (name, n, h) => Math.max(n, Math.ceil(name.length * CHAR_MM / h));
+// 同じ点検項目は二重に入れない：上の区分から順に見て、前に入った項目と同じ文の項目は省く
+const keyOf = t => (t || "").normalize("NFKC").replace(/\s/g, "");
+function itemsInOrder(list) {
+  const seen = new Set(), out = {};
+  for (const name of list) {
+    const c = findChoice(name);
+    const all = c ? c.items : [];
+    out[name] = all.filter(t => { const k = keyOf(t); if (seen.has(k)) return false; seen.add(k); return true; });
+    out[name].dropped = all.length - out[name].length;
+  }
+  return out;
+}
 
 function fillSelect(sel, opts, value, blank) {
   sel.innerHTML = "";
@@ -163,24 +175,25 @@ function columns() {
 }
 // 順に詰める：入らなければ次の列へ（戻らない）。どこにも入らなければ over
 function place(list) {
+  const eff = itemsInOrder(list);
   const cols = columns().map(c => ({ ...c, used: 0, groups: [] }));
   let ci = 0;
   const where = {};
   for (const name of list) {
-    while (ci < cols.length && cols[ci].used + rowsFor(name, cols[ci].lay.h) > cols[ci].cap) ci++;
+    while (ci < cols.length && cols[ci].used + rowsFor(name, eff[name].length, cols[ci].lay.h) > cols[ci].cap) ci++;
     if (ci >= cols.length) { where[name] = null; continue; }
-    const n = rowsFor(name, cols[ci].lay.h);
-    cols[ci].groups.push({ name, start: cols[ci].used, n });
+    const n = rowsFor(name, eff[name].length, cols[ci].lay.h);
+    cols[ci].groups.push({ name, start: cols[ci].used, n, items: eff[name] });
     cols[ci].used += n;
     where[name] = cols[ci];
   }
-  return { cols, where };
+  return { cols, where, eff };
 }
 const colLabel = c => c ? `${c.page}枚目 ${c.side === "L" ? "左" : "右"}` : "入りきらない";
 
 function renderChosen() {
   if (!S.cfg) return;
-  const { cols, where } = place(S.list);
+  const { cols, where, eff } = place(S.list);
   const box = $("chosen");
   box.innerHTML = "";
   S.list.forEach((name, i) => {
@@ -191,7 +204,7 @@ function renderChosen() {
     const items = el("div", { class: "items", hidden: "" });
     (c ? c.items : []).forEach((t, k) => items.append(el("div", {}, `${MARU[k]} ${t}`)));
     const nm = el("button", { class: "link name", onclick: () => { items.hidden = !items.hidden; } },
-      `${name}（${c ? c.n : "?"}項目）`);
+      `${name}（${eff[name].length}項目${eff[name].dropped ? `／重なる ${eff[name].dropped} 項目は省きます` : ""}）`);
     box.append(el("div", { class: "chosenRow" + (w ? "" : " over") },
       el("span", { class: "place" }, colLabel(w)), nm, el("span", { class: "btns" }, up, dn, rm), items));
   });
@@ -290,12 +303,12 @@ function writeColumn(xml, lay, groups) {
   const merges = [];
   let i = 0;
   for (const g of groups) {
-    const c = findChoice(g.name);
+    const its = g.items;
     // 空いた行（前の区分との間）は無い：詰めて入れる
     for (let k = 0; k < g.n; k++, i++) {
-      const has = k < c.items.length;    // 項目の行（番号つき）／名前を入れるための空欄の行
+      const has = k < its.length;    // 項目の行（番号つき）／名前を入れるための空欄の行
       xml = XlsxEdit.setCell(xml, `${lay.no}${rows[i]}`, has ? MARU[k] : null);
-      xml = XlsxEdit.setCell(xml, `${lay.item}${rows[i]}`, has ? c.items[k] : null);
+      xml = XlsxEdit.setCell(xml, `${lay.item}${rows[i]}`, has ? its[k] : null);
       xml = XlsxEdit.setCell(xml, `${c1}${rows[i]}`, k === 0 ? g.name : null, catStyle);
     }
     merges.push(`${c1}${rows[i - g.n]}:${c2}${ends[i - 1]}`);
@@ -321,12 +334,18 @@ function writeColumn(xml, lay, groups) {
   });
   const edge = new Set([...rows, ...ends]);
   for (const r of edge) {
+    let leftWant;                // 同じ行の左隣のセルの書式（結合の中で、書式を持つセルが無いところに使う）
     for (let c = lay.span[0]; c <= lay.span[1]; c++) {
-      const ref = colName(c) + r, cur = XlsxEdit.cellStyle(xml, ref);
-      if (cur === undefined) continue;
-      const base = back[cur] || cur, f = flags[r];
+      const ref = colName(c) + r, cur = XlsxEdit.cellStyle(xml, ref), f = flags[r];
+      if (cur === undefined) {
+        // 横に結合したセルの 2 つ目以降などで、セルが残っていない：境目なら左隣と同じ太線の書式でセルを作る
+        if (f && leftWant !== undefined) xml = XlsxEdit.setCell(xml, ref, null, leftWant);
+        continue;
+      }
+      const base = back[cur] || cur;
       const want = f ? ((top[base] || {})[f] || base) : base;
       if (want !== cur) xml = XlsxEdit.setStyle(xml, ref, want);
+      leftWant = want;
     }
   }
   return XlsxEdit.remerge(xml, r => { const m = r.match(re); return m && inCol.has(m[1]); }, merges);
